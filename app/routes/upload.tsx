@@ -1,9 +1,7 @@
 import { type FormEvent, useState } from "react";
 import Navbar from "~/components/Navbar";
 import FileUploader from "~/components/FileUploader";
-import { convertPdfToImage } from "~/lib/pdf2img";
 import { generateUUID } from "~/lib/utils";
-import { extractTextFromPdf } from "~/lib/pdfText";
 import { getResumeFeedback } from "~/lib/ai";
 
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
@@ -13,6 +11,7 @@ import { auth, db, storage } from "~/lib/firebase";
 const Upload = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [statusText, setStatusText] = useState("");
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [file, setFile] = useState<File | null>(null);
 
   const handleFileSelect = (file: File | null) => setFile(file);
@@ -34,6 +33,8 @@ const Upload = () => {
     setIsProcessing(true);
 
     try {
+      // clear previous errors
+      setErrorMessage(null);
       const uuid = generateUUID();
 
       // 📄 Upload PDF
@@ -44,8 +45,12 @@ const Upload = () => {
 
       // 🖼 Preview image
       setStatusText("Generating preview...");
+      const { convertPdfToImage } = await import("~/lib/pdf2img");
       const imageResult = await convertPdfToImage(file);
-      if (!imageResult.file) throw new Error("Image conversion failed");
+      if (!imageResult.file) {
+        // Surface conversion error (from pdf2img) to the user
+        throw new Error(imageResult.error || "Image conversion failed");
+      }
 
       const imageRef = ref(storage, `resumes/${user.uid}/${uuid}.png`);
       await uploadBytes(imageRef, imageResult.file);
@@ -53,6 +58,7 @@ const Upload = () => {
 
       // 📄 Extract text
       setStatusText("Reading resume text...");
+      const { extractTextFromPdf } = await import("~/lib/pdfText");
       const resumeText = await extractTextFromPdf(file);
 
       console.log("Resume text length:", resumeText.length);
@@ -85,7 +91,9 @@ const Upload = () => {
       window.location.href = `/resume/${uuid}`;
     } catch (error) {
       console.error("Upload / AI error:", error);
-      alert("AI analysis failed. Check console.");
+      const errMsg = (error as any)?.message || String(error);
+      setErrorMessage(errMsg);
+      setStatusText("AI analysis failed");
       setIsProcessing(false);
     }
   };
@@ -123,6 +131,11 @@ const Upload = () => {
 
           {!isProcessing && (
             <form onSubmit={handleSubmit} className="flex flex-col gap-4 mt-8">
+              {errorMessage && (
+                <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg p-3">
+                  <strong>Error:</strong> {errorMessage}
+                </div>
+              )}
               <div className="form-div">
                 <label>Company Name</label>
                 <input name="company-name" required />

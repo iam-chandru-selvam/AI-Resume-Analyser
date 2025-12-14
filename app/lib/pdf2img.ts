@@ -15,8 +15,12 @@ async function loadPdfJs(): Promise<any> {
   if (loadPromise) return loadPromise;
 
   loadPromise = import("pdfjs-dist/build/pdf").then((lib: any) => {
+    // Use the worker file shipped with the installed `pdfjs-dist` package.
+    // Vite serves node_modules under `/node_modules/` in dev, so point to
+    // that worker to guarantee the worker version matches the library.
+    // This avoids CDN fetches and mismatched versions (UnknownErrorException).
     lib.GlobalWorkerOptions.workerSrc =
-      "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+      "/node_modules/pdfjs-dist/build/pdf.worker.min.mjs";
     pdfjsLib = lib;
     return lib;
   });
@@ -52,22 +56,33 @@ export async function convertPdfToImage(
     const blob = await new Promise<Blob | null>((resolve) =>
       canvas.toBlob(resolve, "image/png", 1.0)
     );
+    let finalBlob: Blob | null = blob;
 
-    if (!blob) {
-      return {
-        imageUrl: "",
-        file: null,
-        error: "Failed to create image",
-      };
+    // Fallback: some browsers/environments may return null from toBlob.
+    // Try to get a dataURL and convert it to a blob as a backup.
+    if (!finalBlob) {
+      try {
+        const dataUrl = canvas.toDataURL("image/png");
+        const res = await fetch(dataUrl);
+        finalBlob = await res.blob();
+      } catch (err) {
+        return {
+          imageUrl: "",
+          file: null,
+          error: `Failed to create image (toBlob and dataURL fallback both failed): ${String(
+            err
+          )}`,
+        };
+      }
     }
 
     const originalName = file.name.replace(/\.pdf$/i, "");
-    const imageFile = new File([blob], `${originalName}.png`, {
+    const imageFile = new File([finalBlob as Blob], `${originalName}.png`, {
       type: "image/png",
     });
 
     return {
-      imageUrl: URL.createObjectURL(blob),
+      imageUrl: URL.createObjectURL(finalBlob as Blob),
       file: imageFile,
     };
   } catch (err) {

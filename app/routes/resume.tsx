@@ -5,13 +5,10 @@ import { onAuthStateChanged } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from "~/lib/firebase";
 
-
-
 import Summary from "~/components/Summary";
 import ATS from "~/components/ATS";
 import Details from "~/components/Details";
 import type { Feedback } from "~/types/feedback";
-
 
 export const meta = () => [
   { title: "Dru Resumind | Review" },
@@ -61,7 +58,21 @@ const Resume = () => {
 
       setResumeUrl(data.resumePdfUrl || "");
       setImageUrl(data.imageUrl || ""); // ✅ FIXED FIELD NAME
-      setFeedback(data.feedback || null);
+
+      // Support both new and old saved formats. Older entries may have
+      // `feedback: { raw: string }` (raw JSON) while new ones store the
+      // parsed object. Detect and parse when needed.
+      const fb = data.feedback || null;
+      if (fb && typeof fb.raw === "string") {
+        try {
+          setFeedback(JSON.parse(fb.raw));
+        } catch (err) {
+          console.error("Failed to parse feedback.raw:", err);
+          setFeedback(null);
+        }
+      } else {
+        setFeedback(fb);
+      }
     };
 
     loadResume();
@@ -112,7 +123,7 @@ const Resume = () => {
             <div className="flex flex-col gap-8 animate-in fade-in duration-1000">
               <Summary feedback={feedback} />
               <ATS
-                 score={feedback.ATS.score}
+                score={feedback.ATS.score}
                 suggestions={feedback.ATS.suggestions}
               />
 

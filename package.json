@@ -15,7 +15,7 @@
     "clsx": "^2.1.1",
     "firebase": "^12.6.0",
     "isbot": "^5.1.27",
-    "pdfjs-dist": "^3.11.174",
+    "pdfjs-dist": "^5.4.449",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-dropzone": "^14.3.8",

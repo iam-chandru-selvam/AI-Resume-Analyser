@@ -1,6 +1,11 @@
-import * as pdfjsLib from "pdfjs-dist";
-
 export async function extractTextFromPdf(file: File): Promise<string> {
+  // 🛑 Run only in browser
+  if (typeof window === "undefined") {
+    throw new Error("PDF extraction is only available in the browser");
+  }
+
+  const pdfjsLib = await import("pdfjs-dist");
+
   const arrayBuffer = await file.arrayBuffer();
 
   const loadingTask = pdfjsLib.getDocument({
