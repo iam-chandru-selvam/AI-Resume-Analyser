@@ -1,5 +1,7 @@
 import ScoreGauge from "~/components/ScoreGauge";
 import ScoreBadge from "~/components/ScoreBadge";
+import type { Feedback } from "~/types/feedback";
+
 
 const Category = ({ title, score }: { title: string, score: number }) => {
     const textColor = score > 70 ? 'text-green-600'
