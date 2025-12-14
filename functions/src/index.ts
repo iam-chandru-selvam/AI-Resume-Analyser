@@ -1,56 +1,59 @@
 import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
+import pdfParse from "pdf-parse";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
 admin.initializeApp();
 
-export const analyzeResume = functions.https.onCall(
-  async (data, context) => {
-    const resumeText = data.resumeText as string;
-    const jobTitle = data.jobTitle as string;
-    const jobDescription = data.jobDescription as string;
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 
-    if (!resumeText || !jobTitle) {
+export const analyzeResume = functions
+  .runWith({
+    timeoutSeconds: 120,
+    memory: "1GB",
+  })
+  .https.onCall(async (data: {
+    resumePdfUrl: string;
+    jobTitle: string;
+    jobDescription?: string;
+  }) => {
+
+    const { resumePdfUrl, jobTitle, jobDescription } = data;
+
+    if (!resumePdfUrl || !jobTitle) {
       throw new functions.https.HttpsError(
         "invalid-argument",
-        "Missing resumeText or jobTitle"
+        "Missing resumePdfUrl or jobTitle"
       );
     }
 
-    // 🔐 Read API key safely
-    const apiKey = functions.config().gemini?.key;
-    if (!apiKey) {
+    const response = await fetch(resumePdfUrl);
+    const buffer = Buffer.from(await response.arrayBuffer());
+
+    const parsed = await pdfParse(buffer);
+    const resumeText = parsed.text;
+
+    if (!resumeText || resumeText.length < 50) {
       throw new functions.https.HttpsError(
-        "failed-precondition",
-        "Gemini API key not configured"
+        "invalid-argument",
+        "Failed to extract resume text"
       );
     }
 
-    // 🚀 Initialize Gemini INSIDE function (CRITICAL)
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro" });
+    const model = genAI.getGenerativeModel({
+      model: "gemini-1.0-pro",
+    });
 
     const prompt = `
-You are an ATS resume reviewer.
-
-Job Title: ${jobTitle}
-Job Description: ${jobDescription}
+Return ONLY valid JSON.
 
 Resume:
 ${resumeText}
 
-Return JSON with:
-overallScore,
-toneAndStyle,
-content,
-structure,
-skills,
-ATS
+Job Title: ${jobTitle}
+Job Description: ${jobDescription ?? ""}
 `;
 
     const result = await model.generateContent(prompt);
-    const text = result.response.text();
-
-    return { raw: text };
-  }
-);
+    return JSON.parse(result.response.text());
+  });
