@@ -1,64 +1,73 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router";
-import { usePuterStore } from "~/lib/puter";
+
+import {
+  collection,
+  getDocs,
+  query,
+  where,
+  deleteDoc,
+} from "firebase/firestore";
+import { ref, listAll, deleteObject } from "firebase/storage";
+
+import { auth, db, storage } from "~/lib/firebase";
 
 const WipeApp = () => {
-    const { auth, isLoading, error, clearError, fs, ai, kv } = usePuterStore();
-    const navigate = useNavigate();
-    const [files, setFiles] = useState<FSItem[]>([]);
+  const [files, setFiles] = useState<any[]>([]);
 
-    const loadFiles = async () => {
-        const files = (await fs.readDir("./")) as FSItem[];
-        setFiles(files);
-    };
+  const loadFiles = async () => {
+    const user = auth.currentUser;
+    if (!user) return; // root.tsx already handled redirect
 
-    useEffect(() => {
-        loadFiles();
-    }, []);
+    const folderRef = ref(storage, `resumes/${user.uid}`);
+    const result = await listAll(folderRef);
+    setFiles(result.items);
+  };
 
-    useEffect(() => {
-        if (!isLoading && !auth.isAuthenticated) {
-            navigate("/auth?next=/wipe");
-        }
-    }, [isLoading]);
+  useEffect(() => {
+    loadFiles();
+  }, []);
 
-    const handleDelete = async () => {
-        files.forEach(async (file) => {
-            await fs.delete(file.path);
-        });
-        await kv.flush();
-        loadFiles();
-    };
+  const handleDelete = async () => {
+    const user = auth.currentUser;
+    if (!user) return;
 
-    if (isLoading) {
-        return <div>Loading...</div>;
-    }
-
-    if (error) {
-        return <div>Error {error}</div>;
-    }
-
-    return (
-        <div>
-            Authenticated as: {auth.user?.username}
-            <div>Existing files:</div>
-            <div className="flex flex-col gap-4">
-                {files.map((file) => (
-                    <div key={file.id} className="flex flex-row gap-4">
-                        <p>{file.name}</p>
-                    </div>
-                ))}
-            </div>
-            <div>
-                <button
-                    className="bg-blue-500 text-white px-4 py-2 rounded-md cursor-pointer"
-                    onClick={() => handleDelete()}
-                >
-                    Wipe App Data
-                </button>
-            </div>
-        </div>
+    // 🔥 Delete Firestore documents
+    const q = query(
+      collection(db, "resumes"),
+      where("userId", "==", user.uid)
     );
+
+    const snapshot = await getDocs(q);
+    await Promise.all(snapshot.docs.map((d) => deleteDoc(d.ref)));
+
+    // 🔥 Delete Storage files
+    const folderRef = ref(storage, `resumes/${user.uid}`);
+    const result = await listAll(folderRef);
+    await Promise.all(result.items.map((file) => deleteObject(file)));
+
+    loadFiles();
+  };
+
+  return (
+    <div className="p-6">
+      <h2 className="text-xl font-bold">Wipe My Data</h2>
+
+      <div className="mt-4">
+        <p className="font-semibold">Stored files:</p>
+        {files.length === 0 && <p>No files found</p>}
+        {files.map((file) => (
+          <p key={file.fullPath}>{file.name}</p>
+        ))}
+      </div>
+
+      <button
+        className="bg-red-600 text-white px-4 py-2 rounded-md mt-6"
+        onClick={handleDelete}
+      >
+        Wipe My App Data
+      </button>
+    </div>
+  );
 };
 
 export default WipeApp;

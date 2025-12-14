@@ -1,11 +1,22 @@
 interface Resume {
-    id: string;
-    companyName?: string;
-    jobTitle?: string;
-    imagePath: string;
-    resumePath: string;
-    feedback: Feedback;
+  id: string;
+  userId: string;
+
+  companyName?: string;
+  jobTitle?: string;
+  jobDescription?: string;
+
+  imageUrl: string;
+  resumePdfUrl: string;
+
+  feedback: Feedback;
+  createdAt?: any;
+
+  imageUrl?: string;
+  resumePdfUrl?: string;
+
 }
+
 
 interface Feedback {
     overallScore: number;
