@@ -1,22 +1,13 @@
 import { httpsCallable } from "firebase/functions";
-import { functions } from "~/lib/firebase";
+import { functions } from "./firebase";
 
-export async function getResumeFeedback({
-  resumeText,
-  jobTitle,
-  jobDescription,
-}: {
-  resumeText: string;
+const analyzeResumeFn = httpsCallable(functions, "analyzeResume");
+
+export async function getResumeFeedback(data: {
+  resumePdfUrl: string;
   jobTitle: string;
   jobDescription: string;
 }) {
-  const analyzeResume = httpsCallable(functions, "analyzeResume");
-
-  const result = await analyzeResume({
-    resumeText,
-    jobTitle,
-    jobDescription,
-  });
-
-  return result.data;
+  const res = await analyzeResumeFn(data);
+  return res.data;
 }
